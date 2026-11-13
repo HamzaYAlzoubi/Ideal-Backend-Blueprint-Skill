@@ -2,7 +2,7 @@
 name: ideal-backend-blueprint
 description: "Mandatory blueprint for building any backend: API, server, database, auth, or background-work layer, in any project of any size. Use this skill whenever the user asks to create, extend, or review a backend, REST or GraphQL API, server, database layer, login or auth, payments, or any code that handles requests and stored data, even if they never say 'backend' or describe the project as small. It defines the fixed components, conditional components, and rules that keep the system secure, stable, correct under concurrent requests, fast, scalable, and maintainable. Do not use for pure frontend or UI work, static sites, or one-off scripts with no server or stored data."
 metadata:
-  version: "1.4"
+  version: "1.6"
 ---
 
 # Ideal Backend Blueprint
@@ -29,7 +29,7 @@ Every decision must serve at least one pillar. Do not add anything that serves n
 
 ## Governing principles
 
-1. **Size changes the implementation, never the presence.** The 12 fixed components exist in every project. Reason: a model that treats them as optional for small projects produces fragile ones.
+1. **Size changes the implementation, never the presence.** The 12 fixed components exist in every project. Reason: a model that treats them as optional for small projects produces fragile ones. A minimal form is smaller but fully working, never a stub, a TODO, or a disabled check; if you cannot implement a rule, tell the user instead of faking it.
 2. **Boundaries are fixed; implementations grow.** Write each boundary fully on day one, start with the simplest implementation behind it, and swap it later without touching business logic. Only five capabilities get a swappable boundary: rate-limit store, cache, background-job dispatch, file storage, external providers. Each is an interface your app owns; code talks to the interface, not the tool. Everything else uses its tools directly, because extra abstraction is a burden.
 3. **Build the irreversible decisions fully from the start**, because changing them after data and users accumulate means a rewrite:
    - database schema, constraints, and migrations
@@ -46,6 +46,10 @@ Every decision must serve at least one pillar. Do not add anything that serves n
 ## Before writing code
 
 Write the user a summary of at most ten lines: main entities, key endpoints, whether the four conditional components are needed and why, and anything in the idea that conflicts with this blueprint. Then build.
+
+## Build in verified steps
+
+Build in this order. After each step, run install, build, and tests, and fix every failure before moving on: (1) skeleton, config, error handler, health checks; (2) schema and migrations; (3) request guard and authentication; (4) domain endpoints; (5) concurrency protections and their tests; (6) container and CI.
 
 ---
 
@@ -107,7 +111,7 @@ Minimal form: same rules; no extra tools needed.
 Why: config differs per environment while code does not, and one leaked secret breaks everything.
 - All config comes from environment variables through one config module; no values in code.
 - Validate at startup and fail fast if anything is missing.
-- Secrets never enter Git, images, or logs; pass them at runtime, not build time. Keep a `.env.example` with placeholders.
+- Secrets never enter Git, images, or logs; pass them at runtime, not build time. Keep a `.env.example` with placeholders. Create `.gitignore` and `.dockerignore` that exclude `.env`, dependency folders, and build output, and never copy env files into an image.
 Minimal form: same rules.
 
 ### 8. Error handling
@@ -139,14 +143,14 @@ Minimal form: same rules.
 Why: the safety net that allows changes without fear.
 - Unit tests for business logic.
 - Integration tests on a real database for critical paths.
-- Security tests: a user accessing another user's object; access without authentication.
-- Concurrency test: two identical simultaneous requests yield one result.
+- Security tests: a user accessing another user's object, and access without authentication, must be rejected. Concurrency test: two identical simultaneous requests yield one result.
+- These tests go through the real HTTP endpoints with real tokens and a real database, and must fail if the protection is removed. A test that mocks what it checks is invalid.
 - Run automatically before every merge.
 Minimal form: cover critical paths only (login, sensitive or financial operations, concurrency), not every line.
 
 ### 12. Build and deploy
 Why: what runs on your machine must run the same in production.
-- Container with a multi-stage build, a pinned base image version (never `latest`), and a non-root user.
+- Container with a multi-stage build, a pinned base image version (never `latest`), a non-root user, and a restart policy.
 - Dependency lock files.
 - CI that runs tests and a dependency vulnerability scan before deploy.
 - Ability to roll back a release.
@@ -202,6 +206,11 @@ Upgrade an implementation only on a measured signal from component 9, in this or
 - Unhashed or fast-hashed (SHA, MD5) passwords.
 - Adding a tool or service with no signal that justifies it.
 - Dropping a fixed component because the project is "small".
+- Stubbed, commented-out, or "for MVP" security checks, and documentation that claims what the code does not do.
+
+## Definition of done
+
+Before saying the work is finished, run: install from the lock file, build or type-check, migrations, start the app, both health checks, and the test suite. Show the real output to the user. If a step fails, fix it or report it as failing, and never call a feature working unless you ran it. README and decision notes describe only what exists in the code, and list anything unimplemented under "Not implemented".
 
 ## Pre-delivery checklist
 
@@ -212,10 +221,11 @@ Verify each item. Tell the user about any that fails, and why.
 - [ ] Every list is paginated with a maximum size.
 - [ ] Constraints, indexes, and migrations exist.
 - [ ] Sensitive operations are protected against duplicates and concurrency, and a test proves it.
-- [ ] No secrets in code, Git, or logs.
+- [ ] No secrets in code, Git, or logs, and `.gitignore` and `.dockerignore` exist.
 - [ ] A 500 error reveals no internal details.
 - [ ] Structured logs with request IDs, plus liveness and readiness checks.
 - [ ] Graceful shutdown works and no state lives in the process.
 - [ ] Tests for critical paths pass.
 - [ ] Dockerfile and CI exist.
+- [ ] The project installed, built, started, and passed its tests, with real output shown, and README and decision notes match the code.
 - [ ] You told the user about your conditional-component decisions and any conflict with this blueprint.
